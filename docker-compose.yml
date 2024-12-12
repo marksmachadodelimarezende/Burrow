@@ -1,10 +1,13 @@
-version: "2"
 services:
   burrow:
     build: .
+    container_name: burrow
+    hostname: burrow
+    networks:
+      - kafka-network
     volumes:
-      - ${PWD}/docker-config:/etc/burrow/
-      - ${PWD}/tmp:/var/tmp/burrow
+      - ./docker-config:/etc/burrow/
+#      - ./tmp:/var/tmp/burrow
     ports:
       - 8000:8000
     depends_on:
@@ -12,17 +15,47 @@ services:
       - kafka
     restart: always
 
+  burrow-exporter:
+    image: simenduev/burrow-exporter
+    container_name: burrow-exporter
+    hostname: burrow-exporter
+    networks:
+      - kafka-network
+    ports:
+      - 8237:8237
+    depends_on:
+      - burrow
+    command: ["--burrow.address", "http://burrow:8000"]
+
   zookeeper:
     image: wurstmeister/zookeeper
+    container_name: zookeeper
+    hostname: zookeeper
+    networks:
+      - kafka-network
     ports:
       - 2181:2181
 
   kafka:
     image: wurstmeister/kafka
+    container_name: kafka
+    hostname: kafka
+    networks:
+      - kafka-network
     ports:
       - 9092:9092
+    depends_on:
+      - zookeeper
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181/local
       KAFKA_ADVERTISED_HOST_NAME: kafka
       KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:19092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:19092
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
       KAFKA_CREATE_TOPICS: "test-topic:2:1,test-topic2:1:1,test-topic3:1:1"
+
+networks:
+  kafka-network:
+    external: true
